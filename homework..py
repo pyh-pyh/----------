@@ -1,3 +1,13 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8 -*-
+'''
+# File    :   homework..py
+# Time    :   2022/03/14 20:58:33
+# Author  :   Pu Yanheng
+'''
+
+# here put the import lib
+
 import cv2
 import numpy as np
 
