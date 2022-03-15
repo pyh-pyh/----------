@@ -12,27 +12,30 @@ import cv2
 import numpy as np
 
 
-def read_img(path, cvtcolor=False):
+def read_img(path, invertcolor=False, show=False):
     """
     ### Description
     Read image.
 
     ### Parameters
     - `path`: path of image
-    - `cvtcolor`: whether to convert the color of image
+    - `invertcolor`: whether to invert the color of image
+    - `show`: whether to show the image
 
     ### Returns
     Array of image.
     """
 
     img = cv2.imdecode(np.fromfile(path, dtype=np.uint8), -1)
-    if cvtcolor:
-        img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
+    if invertcolor:
+        img = invert_color(img)
+    if show:
+        show_img(img)
 
     return img
 
 
-def read_templates(cvtcolor=False):
+def read_templates(invertcolor=False, show=False):
     """
     ### Description
     Read templates' images.
@@ -45,7 +48,8 @@ def read_templates(cvtcolor=False):
     for i in range(10):
         temp.append(
             read_img('Template matching/Train/' + str(i) + '_.jpg',
-                     cvtcolor=cvtcolor))
+                     invertcolor=invertcolor,
+                     show=show))
 
     return np.array(temp)
 
@@ -222,10 +226,10 @@ def save_result(test,
     - `path`: directory of the file
     """
 
-    test[m:m + temp_x, n] = [255, 0, 0]
-    test[m:m + temp_x, n + temp_y] = [255, 0, 0]
-    test[m, n:n + temp_y] = [255, 0, 0]
-    test[m + temp_x, n:n + temp_y] = [255, 0, 0]
+    test[m:m + temp_x - 1, n] = [255, 0, 0]
+    test[m:m + temp_x - 1, n + temp_y - 1] = [255, 0, 0]
+    test[m, n:n + temp_y - 1] = [255, 0, 0]
+    test[m + temp_x - 1, n:n + temp_y - 1] = [255, 0, 0]
 
     cv2.imwrite(path + filename, test)
 
@@ -234,7 +238,7 @@ def match_all(templates,
               test,
               threshold,
               path,
-              cvtcolor=False,
+              invertcolor=False,
               zoom=True,
               zoom_times=5):
     """
@@ -249,7 +253,7 @@ def match_all(templates,
     - `zoom_times`: how many times the templates been enlarged
     """
 
-    test = read_img(test, cvtcolor)
+    test = read_img(test, invertcolor)
     for i, template in enumerate(templates):
         if zoom:
             for j in range(zoom_times):
@@ -260,15 +264,30 @@ def match_all(templates,
             matching(template, test, threshold, str(i), path)
 
 
+def invert_color(img):
+    """
+    ### Description
+    Invert the color of the picture.
+
+    ### Parameters
+    - `img`: array of the image
+
+    ### Returns
+    Inverted image.
+    """
+
+    return 255 - img
+
+
 if __name__ == '__main__':
-    templates = read_templates(cvtcolor=True)
-    test_img = 'Template matching/Test/4.jpg'
-    result_path = 'Template matching/Result/4/'
-    threshold = 0.95
+    templates = read_templates(invertcolor=False,show=False)
+    test_img = 'Template matching/Test/5.jpg'
+    result_path = 'Template matching/Result/5/'
+    threshold = 0.9
 
     match_all(templates,
               test_img,
               threshold,
               result_path,
-              cvtcolor=False,
+              invertcolor=False,
               zoom=False)
