@@ -12,7 +12,7 @@ import cv2
 import numpy as np
 
 
-def read_img(path, invertcolor=False, show=False):
+def read_img(path, show=False):
     """
     ### Description
     Read image.
@@ -27,15 +27,13 @@ def read_img(path, invertcolor=False, show=False):
     """
 
     img = cv2.imdecode(np.fromfile(path, dtype=np.uint8), -1)
-    if invertcolor:
-        img = invert_color(img)
     if show:
         show_img(img)
 
     return img
 
 
-def read_templates(invertcolor=False, show=False):
+def read_templates(show=False):
     """
     ### Description
     Read templates' images.
@@ -47,57 +45,9 @@ def read_templates(invertcolor=False, show=False):
     temp = []
     for i in range(10):
         temp.append(
-            read_img('Template matching/Train/' + str(i) + '_.jpg',
-                     invertcolor=invertcolor,
-                     show=show))
+            read_img('Template matching/Train/' + str(i) + '_.jpg', show=show))
 
     return np.array(temp)
-
-
-def read_tests():
-    """
-    ### Description
-    Read test images.
-
-    ### Returns
-    Array of all the test images.
-    """
-
-    tests = []
-    for i in range(10):
-        tests.append(read_img('Template matching/Test/' + str(i) + '.jpg'))
-
-    return np.array(tests)
-
-
-def resize_template(temp, enlarge=True):
-    """
-    ### Description
-    Zoom in or out the template by one pixel.
-
-    ### Parameters
-    - `temp`: the array of template image
-    - `enlarge`: if enlarge is True, zoom in the picture, vice versa
-
-    ### Returns
-    Array of resized template image.
-    """
-
-    x, y = temp.shape[0:2]
-    if x > y:
-        ratio = x / y
-        if enlarge:
-            temp = cv2.resize(temp, (y + 1, int(x + ratio)))
-        if not enlarge:
-            temp = cv2.resize(temp, (y - 1, int(x - ratio)))
-    else:
-        ratio = y / x
-        if enlarge:
-            temp = cv2.resize(temp, (int(y + ratio), x + 1))
-        if not enlarge:
-            temp = cv2.resize(temp, (int(y - ratio), x - 1))
-
-    return temp
 
 
 def show_img(img, name='img'):
@@ -114,252 +64,6 @@ def show_img(img, name='img'):
     d = cv2.waitKey(0)
     if d == ord('q'):
         cv2.destroyAllWindows()
-
-
-def keep_black_pixels(image, background, front='black', threshold=50):
-    """
-    ### Description
-    Keep all the black pixels in one image and turn others to other color.
-
-    ### Parameters
-    - `image`: array of input image
-    - `background`: background color, you can choose 'white', 'green', and 'red'
-    - `threshold`: threshold to confirm black
-
-    ### Returns
-    Image after process.
-    """
-
-    black = np.where(np.average(image, axis=2) <= threshold)
-    not_black = np.where(np.average(image, axis=2) > threshold)
-    x, y = not_black[0:2]
-    for i in range(len(x)):
-        if background == 'white':
-            image[x[i], y[i]] = np.array([255, 255, 255])
-        if background == 'green':
-            image[x[i], y[i]] = np.array([0, 255, 0])
-        if background == 'red':
-            image[x[i], y[i]] = np.array([0, 0, 255])
-
-    x_b, y_b = black[0:2]
-    for i in range(len(x_b)):
-        if front == 'black':
-            image[x_b[i], y_b[i]] = np.array([0, 0, 0])
-        if front == 'white':
-            image[x_b[i], y_b[i]] = np.array([255, 255, 255])
-
-    return np.uint8(image)
-
-
-def matching(template,
-             test,
-             threshold,
-             template_name,
-             path,
-             by_black_pixel=False,
-             show=False,
-             save=True):
-    """
-    ### Description
-    Sliding window and search for matching area.
-
-    ### Parameters
-    - `template`: template for matching
-    - `test`: test image
-    - `threshold`: threshold used to determine whether a match is made
-    - `template_name`: name of the template
-    - `path`: where to save the result
-    - `by_black_pixel`: whether to match by black pixels
-    - `show`: whether to show image while matching
-    - `save`: whether to save the result
-    """
-
-    if by_black_pixel:
-        template = keep_black_pixels(template, 'green', front='white')
-        show_img(template)
-        # test = keep_black_pixels(test, 'green')
-    template = np.uint32(template)
-    parts, test, color = find_plate(test)
-    test = np.uint32(test)
-
-    filename = 'Template ' + template_name
-
-    temp_x, temp_y = template.shape[0:2]
-    test_x, test_y = test.shape[0:2]
-
-    if temp_x > test_x:
-        template = np.uint32(cv2.resize(np.uint8(template), (temp_y, test_x)))
-
-    temp_x, temp_y = template.shape[0:2]
-    test_x, test_y = test.shape[0:2]
-
-
-    result_array = np.empty((test_x - temp_x + 1, test_y - temp_y + 1))
-    possible = []
-
-    for m in range(test_x - temp_x + 1):
-        for n in range(test_y - temp_y + 1):
-
-            window = test[m:m + temp_x, n:n + temp_y]
-            product = template * window
-            summ = np.sum(product)
-            factor = (np.sqrt(np.sum(template * template)) *
-                      np.sqrt(np.sum(window * window)))
-            result = summ / factor
-
-            result_array[m, n] = result
-
-            if result > threshold:
-                near = False
-                if possible != []:
-                    for index in possible:
-                        if abs(m - index[0]) < 5 and abs(n - index[1]) < 5:
-                            near = True
-                if not near:
-                    if show:
-                        show_img(np.uint8(window), 'possible')
-                    possible.append((m, n))
-
-    if len(possible) != 0:
-
-        for i, index in enumerate(possible):
-            if show:
-                show_img(
-                    np.uint8(test[index[0]:index[0] + temp_x,
-                                  index[1]:index[1] + temp_y]),
-                    'Found ' + str(i))
-            if save:
-                save_result(np.uint8(test),
-                            index[0],
-                            index[1],
-                            temp_x,
-                            temp_y,
-                            filename + ' Found ' + str(i) + '.jpg',
-                            path=path)
-
-    else:
-        max_result = np.max(result_array)
-        max_m, max_n = np.where(result_array == max_result)[0:2]
-        max_m, max_n = int(max_m), int(max_n)
-        if show:
-            show_img(np.uint8(test[max_m:max_m + temp_x, max_n:max_n + temp_y]),
-                     'Most likely')
-        if save:
-            save_result(np.uint8(test),
-                        max_m,
-                        max_n,
-                        temp_x,
-                        temp_y,
-                        filename + ' Most likely.jpg',
-                        path=path)
-
-
-def matching_by_features(template,
-                         test,
-                         threshold,
-                         template_name,
-                         path,
-                         show=False,
-                         save=True):
-    """
-    ### Description
-    Sliding window and search for matching area, using divided features.
-
-    ### Parameters
-    - `template`: template for matching
-    - `test`: test image
-    - `threshold`: threshold used to determine whether a match is made
-    - `template_name`: name of the template
-    - `path`: where to save the result
-    - `show`: whether to show image while matching
-    - `save`: whether to save the result
-    """
-
-    template = np.uint32(template)
-    test = np.uint32(test)
-
-    filename = 'Template ' + template_name
-
-    temp_x, temp_y = template.shape[0:2]
-    test_x, test_y = test.shape[0:2]
-
-    result_row_array = np.empty((test_x - temp_x + 1, test_y - temp_y + 1))
-    result_col_array = np.empty((test_x - temp_x + 1, test_y - temp_y + 1))
-    possible = []
-
-    template_black = np.average(template, 2)
-    template_black_row_avg = np.average(template_black, 1)
-    template_black_col_avg = np.average(template_black, 0)
-
-    for m in range(test_x - temp_x + 1):
-        for n in range(test_y - temp_y + 1):
-
-            window = test[m:m + temp_x, n:n + temp_y]
-            window_black = np.average(window, 2)
-            window_black_row_avg = np.average(window_black, 1)
-            window_black_col_avg = np.average(window_black, 0)
-
-            product_row = template_black_row_avg * window_black_row_avg
-            summ_row = np.sum(product_row)
-            factor_row = (
-                np.sqrt(np.sum(template_black_row_avg * template_black_row_avg))
-                * np.sqrt(np.sum(window_black_row_avg * window_black_row_avg)))
-            result_row = summ_row / factor_row
-
-            product_col = template_black_col_avg * window_black_col_avg
-            summ_col = np.sum(product_col)
-            factor_col = (
-                np.sqrt(np.sum(template_black_col_avg * template_black_col_avg))
-                * np.sqrt(np.sum(window_black_row_avg * window_black_row_avg)))
-            result_col = summ_col / factor_col
-
-            result_row_array[m, n] = result_row
-            result_col_array[m, n] = result_col
-
-            if result_row > threshold and result_col > threshold:
-                near = False
-                if possible != []:
-                    for index in possible:
-                        if abs(m - index[0]) < 5 and abs(n - index[1]) < 5:
-                            near = True
-                if not near:
-                    if show:
-                        show_img(np.uint8(window), 'possible')
-                    possible.append((m, n))
-
-    if len(possible) != 0:
-
-        for i, index in enumerate(possible):
-            if show:
-                show_img(
-                    np.uint8(test[index[0]:index[0] + temp_x,
-                                  index[1]:index[1] + temp_y]),
-                    'Found ' + str(i))
-            if save:
-                save_result(np.uint8(test),
-                            index[0],
-                            index[1],
-                            temp_x,
-                            temp_y,
-                            filename + ' Found ' + str(i) + '.jpg',
-                            path=path)
-
-    else:
-        max_result = np.max(result_row_array + result_col_array)
-        max_m, max_n = np.where(result_row_array +
-                                result_col_array == max_result)[0:2]
-        max_m, max_n = int(max_m), int(max_n)
-        if show:
-            show_img(np.uint8(test[max_m:max_m + temp_x, max_n:max_n + temp_y]),
-                     'Most likely')
-        if save:
-            save_result(np.uint8(test),
-                        max_m,
-                        max_n,
-                        temp_x,
-                        temp_y,
-                        filename + ' Most likely.jpg',
-                        path=path)
 
 
 def save_result(test,
@@ -383,65 +87,10 @@ def save_result(test,
     - `path`: directory of the file
     """
 
-    test[m:m + temp_x - 1, n] = [255, 0, 0]
-    test[m:m + temp_x - 1, n + temp_y - 1] = [255, 0, 0]
-    test[m, n:n + temp_y - 1] = [255, 0, 0]
-    test[m + temp_x - 1, n:n + temp_y - 1] = [255, 0, 0]
+    test_rec = cv2.rectangle(test, (n, m), (n + temp_y - 1, m + temp_x - 1),
+                             (0, 0, 255))
 
-    cv2.imwrite(path + filename, test)
-
-
-def match_all(templates,
-              test,
-              threshold,
-              path,
-              by_feature=False,
-              invertcolor=False,
-              zoom=True,
-              zoom_times=5):
-    """
-    ### Description
-    Run matching process for every template on every test images.
-
-    ### Parameters
-    - `templates`: array of every template array under Train/
-    - `test`: file name of the image to be matched
-    - `threshold`: threshold used to determine whether a match is made
-    - `zoom`: whether to enlarge size of template for matching
-    - `zoom_times`: how many times the templates been enlarged
-    """
-
-    test = read_img(test, invertcolor)
-    for i, template in enumerate(templates):
-        if zoom:
-            for j in range(zoom_times):
-                if not by_feature:
-                    matching(template, test, threshold,
-                             str(i) + 'zoom ' + str(j), path)
-                else:
-                    matching_by_features(template, test, threshold,
-                                         str(i) + 'zoom ' + str(j), path)
-                template = resize_template(template)
-        if not zoom:
-            if not by_feature:
-                matching(template, test, threshold, str(i), path)
-            else:
-                matching_by_features(template, test, threshold, str(i), path)
-
-
-def invert_color(img):
-    """
-    ### Description
-    Invert the color of the picture.
-
-    ### Parameters
-    - `img`: array of the image
-
-    ### Returns
-    Inverted image.
-    """
-
-    return 255 - img
+    cv2.imwrite(path + filename, test_rec)
 
 
 def point_limit(point):
@@ -517,6 +166,19 @@ def seperate_card(img, waves):
 
 
 def find_plate(img, resize_rate=1):
+    """
+    ### Description
+    Find the rectangle area of the car plate in one picture.
+
+    ### Parameters
+    - `img`: input image
+    - `resize_rate`: resize rate of the original image
+
+    ### Returns
+    part_cards: saperated character in car plate
+    roi: car plate image
+    color: color of the car plate
+    """
 
     pic_hight, pic_width = img.shape[:2]
     if pic_width > 1000:
@@ -725,7 +387,7 @@ def find_plate(img, resize_rate=1):
     #以上为车牌定位
 
     #以下为识别车牌中的字符
-    predict_result = []
+    part_cards = []
     roi = None
     card_color = None
     for i, color in enumerate(colors):
@@ -816,23 +478,175 @@ def find_plate(img, resize_rate=1):
                 #show_img(part_card, 'new part card')
 
             roi = card_img
-            show_img(roi, 'car plate')
+            #show_img(roi, 'car plate')
             card_color = color
             break
 
     return part_cards, roi, card_color  #识别到的字符、定位的车牌图像、车牌颜色
 
 
+def matching(template,
+             test,
+             threshold,
+             template_name,
+             path,
+             to_gray=True,
+             invert=False,
+             normalize=True,
+             show=False,
+             save=True):
+    """
+    ### Description
+    Sliding window and search for matching area.
+
+    ### Parameters
+    - `template`: template for matching
+    - `test`: test image
+    - `threshold`: threshold used to determine whether a match is made
+    - `template_name`: name of the template
+    - `path`: where to save the result
+    - `to_gray`: whether to turn image to grayscale
+    - `invert`: whether to invert the color of image
+    - `normalize`: whether to normalize the image
+    - `show`: whether to show image while matching
+    - `save`: whether to save the result
+    """
+
+    resize_rates = (1, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.95)
+    for rate in resize_rates:
+        parts, card, color = find_plate(test, rate)
+        if card is not None:
+            fit_rate = rate
+            break
+
+    if fit_rate != 1:
+        card_height, card_width = card.shape[:2]
+        card = cv2.resize(card,
+                          (int(card_width / rate), int(card_height / rate)),
+                          interpolation=cv2.INTER_LANCZOS4)
+
+    if to_gray:
+        template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+        card = cv2.cvtColor(card, cv2.COLOR_BGR2GRAY)
+
+    if invert:
+        template = 255 - template
+
+    if normalize:
+        template = template / np.max(template) * 255
+        card = card / np.max(card) * 255
+
+    template = np.uint32(template)
+    card = np.uint32(card)
+
+    filename = 'Template ' + template_name
+
+    temp_x, temp_y = template.shape[0:2]
+    test_x, test_y = card.shape[0:2]
+
+    template = np.uint32(cv2.resize(np.uint8(template), (temp_y, test_x)))
+
+    temp_x, temp_y = template.shape[0:2]
+    test_x, test_y = card.shape[0:2]
+
+    result_array = np.empty((test_x - temp_x + 1, test_y - temp_y + 1))
+    possible = []
+
+    for m in range(test_x - temp_x + 1):
+        for n in range(test_y - temp_y + 1):
+
+            window = card[m:m + temp_x, n:n + temp_y]
+            product = template * window
+            summ = np.sum(product)
+            factor = (np.sqrt(np.sum(template * template)) *
+                      np.sqrt(np.sum(window * window)))
+            result = summ / factor
+
+            result_array[m, n] = result
+
+            if result > threshold:
+                near = False
+                if possible != []:
+                    for index in possible:
+                        if abs(m - index[0]) < 5 and abs(n - index[1]) < 5:
+                            near = True
+                if not near:
+                    if show:
+                        if to_gray:
+                            window_show = cv2.cvtColor(np.uint8(window),
+                                                       cv2.COLOR_GRAY2BGR)
+                            show_img(np.uint8(window_show), 'possible')
+                        else:
+                            show_img(np.uint8(window), 'possible')
+                    possible.append((m, n))
+
+    if to_gray:
+        card = cv2.cvtColor(np.uint8(card), cv2.COLOR_GRAY2BGR)
+
+    if len(possible) != 0:
+
+        for i, index in enumerate(possible):
+
+            parts, card_no_change, color = find_plate(test, fit_rate)
+            if fit_rate != 1:
+                card_height, card_width = card_no_change.shape[:2]
+                card_no_change = cv2.resize(
+                    card_no_change,
+                    (int(card_width / rate), int(card_height / rate)),
+                    interpolation=cv2.INTER_LANCZOS4)
+
+            if show:
+                show_img(
+                    np.uint8(card_no_change[index[0]:index[0] + temp_x,
+                                            index[1]:index[1] + temp_y]),
+                    'Found ' + str(i))
+
+            if save:
+                test_save = np.uint8(card_no_change)
+                save_result(test_save,
+                            index[0],
+                            index[1],
+                            temp_x,
+                            temp_y,
+                            filename + ' Found ' + str(i) + '.jpg',
+                            path=path)
+
+    else:
+        max_result = np.max(result_array)
+        max_m, max_n = np.where(result_array == max_result)[0:2]
+        max_m, max_n = int(max_m), int(max_n)
+        parts, card_no_change, color = find_plate(test, fit_rate)
+        if fit_rate != 1:
+            card_height, card_width = card_no_change.shape[:2]
+            card_no_change = cv2.resize(
+                card_no_change,
+                (int(card_width / rate), int(card_height / rate)),
+                interpolation=cv2.INTER_LANCZOS4)
+
+        if show:
+            show_img(
+                np.uint8(card_no_change[max_m:max_m + temp_x,
+                                        max_n:max_n + temp_y]), 'Most likely')
+        if save:
+            save_result(np.uint8(card_no_change),
+                        max_m,
+                        max_n,
+                        temp_x,
+                        temp_y,
+                        filename + ' Most likely.jpg',
+                        path=path)
+
+
 if __name__ == '__main__':
-    templates = read_templates(invertcolor=False, show=False)
-    test_img = 'Template matching/Test/1.jpg'
-    result_path = 'Template matching/Result/1/'
+    templates = read_templates(show=False)
+    test_img = read_img('Template matching/Test/0.jpg')
+    result_path = 'Template matching/Result/0/'
     threshold = 0.95
 
-    match_all(templates,
-              test_img,
-              threshold,
-              result_path,
-              by_feature=False,
-              invertcolor=False,
-              zoom=False)
+    for i, template in enumerate(templates):
+        matching(template,
+                 test_img,
+                 threshold,
+                 str(i),
+                 result_path,
+                 invert=False)
