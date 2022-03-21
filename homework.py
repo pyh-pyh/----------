@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
 '''
-# File    :   homework..py
+# File    :   homework.py
 # Time    :   2022/03/14 20:58:33
 # Author  :   Pu Yanheng
 '''
 
 # here put the import lib
 
+from cmath import isnan
 import cv2
 import numpy as np
 
@@ -490,7 +491,7 @@ def matching(template,
              threshold,
              template_name,
              path,
-             saparate_feature=True,
+             saparate_feature='no',
              to_gray=True,
              invert=False,
              normalize=True,
@@ -559,23 +560,139 @@ def matching(template,
 
             window = card[m:m + temp_x, n:n + temp_y]
 
-            if not saparate_feature:
+            if saparate_feature == 'no':
                 product = template * window
                 summ = np.sum(product)
                 factor = (np.sqrt(np.sum(template * template)) *
                           np.sqrt(np.sum(window * window)))
                 result = summ / factor
 
-            else:
-                template_upleft = template[:int(temp_x / 2), :int(temp_y / 2)]
-                template_upright = template[:int(temp_x / 2), int(temp_y / 2):]
-                template_downleft = template[int(temp_x / 2):, :int(temp_y / 2)]
-                template_upleft = template[int(temp_x / 2):, int(temp_y / 2):]
+            elif saparate_feature == 'black pixel':
+                template_black_pos_x, template_black_pos_y = np.where(
+                    template < 100)[:2]
+                template_black_row = np.zeros((2, temp_x))
+                template_black_col = np.zeros((3, temp_y))
 
-                window_upleft = window[:int(temp_x / 2), :int(temp_y / 2)]
-                window_upright = window[:int(temp_x / 2), int(temp_y / 2):]
-                window_downleft = window[int(temp_x / 2):, :int(temp_y / 2)]
-                window_upleft = window[int(temp_x / 2):, int(temp_y / 2):]
+                for x, y in zip(template_black_pos_x, template_black_pos_y):
+                    if y < int(temp_y / 2):
+                        template_black_row[0, x] += 1
+                    else:
+                        template_black_row[1, x] += 1
+
+                    if x < int(temp_x / 3):
+                        template_black_col[0, y] += 1
+                    elif int(temp_x / 3) <= x < int(2 * temp_x / 3):
+                        template_black_col[1, y] += 1
+                    else:
+                        template_black_col[2, y] += 1
+
+                window_black_pos_x, window_black_pos_y = np.where(
+                    window < 40)[:2]
+                window_black_row = np.zeros((2, temp_x))
+                window_black_col = np.zeros((3, temp_y))
+
+                for x, y in zip(window_black_pos_x, window_black_pos_y):
+                    if y < int(temp_y / 2):
+                        window_black_row[0, x] += 1
+                    else:
+                        window_black_row[1, x] += 1
+
+                    if x < int(temp_x / 3):
+                        window_black_col[0, y] += 1
+                    elif int(temp_x / 3) <= x < int(2 * temp_x / 3):
+                        window_black_col[1, y] += 1
+                    else:
+                        window_black_col[2, y] += 1
+
+                product_row = template_black_row * window_black_row
+                product_col = template_black_col * window_black_col
+                sum_row = np.sum(product_row)
+                sum_col = np.sum(product_col)
+                factor_row = np.sqrt(
+                    np.sum(template_black_row * template_black_row)) * np.sqrt(
+                        np.sum(window_black_row * window_black_row))
+                factor_col = np.sqrt(
+                    np.sum(template_black_col * template_black_col)) * np.sqrt(
+                        np.sum(window_black_col * window_black_col))
+                result_row = sum_row / factor_row
+                result_col = sum_col / factor_col
+
+                result = (result_row + result_col) / 2
+                if isnan(result):
+                    result = 0
+
+            elif saparate_feature == 'add':
+                template = np.resize(template, (temp_x - (temp_x % 3), temp_y -
+                                                (temp_y % 2)))
+                window = np.resize(window, (temp_x - (temp_x % 3), temp_y -
+                                            (temp_y % 2)))
+                temp_x, temp_y = template.shape[:2]
+
+                template_row_1 = np.uint32(
+                    (template[:int(temp_x / 3), :int(temp_y / 2)] +
+                     template[:int(temp_x / 3),
+                              int(temp_y / 2):]) / 2)
+                template_row_2 = np.uint32(
+                    (template[int(temp_x / 3):int(2 * temp_x / 3), :int(temp_y /
+                                                                        2)] +
+                     template[int(temp_x / 3):int(2 * temp_x / 3),
+                              int(temp_y / 2):]) / 2)
+                template_row_3 = np.uint32(
+                    (template[int(2 * temp_x / 3):, :int(temp_y / 2)] +
+                     template[int(2 * temp_x / 3):,
+                              int(temp_y / 2):]) / 2)
+                template_col_1 = np.uint32(
+                    (template[:int(temp_x / 3), :int(temp_y / 2)] +
+                     template[int(temp_x / 3):int(2 * temp_x / 3), :int(temp_y /
+                                                                        2)] +
+                     template[int(2 * temp_x / 3):, :int(temp_y / 2)]) / 3)
+                template_col_2 = np.uint32(
+                    (template[:int(temp_x / 3),
+                              int(temp_y / 2):] +
+                     template[int(temp_x / 3):int(2 * temp_x / 3),
+                              int(temp_y / 2):] + template[int(2 * temp_x / 3):,
+                                                           int(temp_y / 2):]) /
+                    3)
+
+                window_row_1 = np.uint32((
+                    window[:int(temp_x / 3), :int(temp_y / 2)] +
+                    window[:int(temp_x / 3), int(temp_y / 2):]) / 2)
+                window_row_2 = np.uint32(
+                    (window[int(temp_x / 3):int(2 * temp_x / 3), :int(temp_y /
+                                                                      2)] +
+                     window[int(temp_x / 3):int(2 * temp_x / 3),
+                            int(temp_y / 2):]) / 2)
+                window_row_3 = np.uint32(
+                    (window[int(2 * temp_x / 3):, :int(temp_y / 2)] +
+                     window[int(2 * temp_x / 3):,
+                            int(temp_y / 2):]) / 2)
+                window_col_1 = np.uint32(
+                    (window[:int(temp_x / 3), :int(temp_y / 2)] +
+                     window[int(temp_x / 3):int(2 * temp_x / 3), :int(temp_y /
+                                                                      2)] +
+                     window[int(2 * temp_x / 3):, :int(temp_y / 2)]) / 3)
+                window_col_2 = np.uint32((
+                    window[:int(temp_x / 3), int(temp_y / 2):] +
+                    window[int(temp_x / 3):int(2 * temp_x / 3),
+                           int(temp_y / 2):] + window[int(2 * temp_x / 3):,
+                                                      int(temp_y / 2):]) / 3)
+
+                result_list = np.zeros((5))
+                for i, (temp, win) in enumerate(
+                        zip([
+                            template_row_1, template_row_2, template_row_3,
+                            template_col_1, template_col_2
+                        ], [
+                            window_row_1, window_row_2, window_row_3,
+                            window_col_1, window_col_2
+                        ])):
+                    product = temp * win
+                    summ = np.sum(product)
+                    factor = (np.sqrt(np.sum(temp * temp)) *
+                              np.sqrt(np.sum(win * win)))
+                    result = summ / factor
+                    result_list[i] = result
+                result = np.average(result_list)
 
             result_array[m, n] = result
 
@@ -629,7 +746,7 @@ def matching(template,
     else:
         max_result = np.max(result_array)
         max_m, max_n = np.where(result_array == max_result)[0:2]
-        max_m, max_n = int(max_m), int(max_n)
+        max_m, max_n = int(max_m[0]), int(max_n[0])
         parts, card_no_change, color = find_plate(test, fit_rate)
         if fit_rate != 1:
             card_height, card_width = card_no_change.shape[:2]
@@ -654,8 +771,8 @@ def matching(template,
 
 if __name__ == '__main__':
     templates = read_templates(show=False)
-    test_img = read_img('Template matching/Test/0.jpg')
-    result_path = 'Template matching/Result/0/'
+    test_img = read_img('Template matching/Test/1.jpg')
+    result_path = 'Template matching/Feature/1/'
     threshold = 0.95
 
     for i, template in enumerate(templates):
@@ -664,4 +781,9 @@ if __name__ == '__main__':
                  threshold,
                  str(i),
                  result_path,
-                 invert=False)
+                 saparate_feature='add',
+                 to_gray=True,
+                 invert=False,
+                 normalize=True,
+                 show=False,
+                 save=True)
