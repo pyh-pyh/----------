@@ -490,6 +490,7 @@ def matching(template,
              threshold,
              template_name,
              path,
+             saparate_feature=True,
              to_gray=True,
              invert=False,
              normalize=True,
@@ -505,6 +506,7 @@ def matching(template,
     - `threshold`: threshold used to determine whether a match is made
     - `template_name`: name of the template
     - `path`: where to save the result
+    - `saparate_feature`: whether to saparate feature
     - `to_gray`: whether to turn image to grayscale
     - `invert`: whether to invert the color of image
     - `normalize`: whether to normalize the image
@@ -530,7 +532,7 @@ def matching(template,
         card = cv2.cvtColor(card, cv2.COLOR_BGR2GRAY)
 
     if invert:
-        template = 255 - template
+        card = 255 - card
 
     if normalize:
         template = template / np.max(template) * 255
@@ -556,11 +558,24 @@ def matching(template,
         for n in range(test_y - temp_y + 1):
 
             window = card[m:m + temp_x, n:n + temp_y]
-            product = template * window
-            summ = np.sum(product)
-            factor = (np.sqrt(np.sum(template * template)) *
-                      np.sqrt(np.sum(window * window)))
-            result = summ / factor
+
+            if not saparate_feature:
+                product = template * window
+                summ = np.sum(product)
+                factor = (np.sqrt(np.sum(template * template)) *
+                          np.sqrt(np.sum(window * window)))
+                result = summ / factor
+
+            else:
+                template_upleft = template[:int(temp_x / 2), :int(temp_y / 2)]
+                template_upright = template[:int(temp_x / 2), int(temp_y / 2):]
+                template_downleft = template[int(temp_x / 2):, :int(temp_y / 2)]
+                template_upleft = template[int(temp_x / 2):, int(temp_y / 2):]
+
+                window_upleft = window[:int(temp_x / 2), :int(temp_y / 2)]
+                window_upright = window[:int(temp_x / 2), int(temp_y / 2):]
+                window_downleft = window[int(temp_x / 2):, :int(temp_y / 2)]
+                window_upleft = window[int(temp_x / 2):, int(temp_y / 2):]
 
             result_array[m, n] = result
 
